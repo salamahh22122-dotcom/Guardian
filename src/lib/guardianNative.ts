@@ -24,6 +24,9 @@ export type NativeGalleryItem = {
 export interface GuardianNativePlugin {
   requestPermissions(): Promise<GuardianPermissionState>;
   getPermissionStatus(): Promise<GuardianPermissionState>;
+  requestGalleryPermissions(): Promise<GuardianPermissionState>;
+  startConnection(options: { childId: string; sessionToken: string }): Promise<void>;
+  stopConnection(): Promise<void>;
   getGallery(options?: { limit?: number }): Promise<{ items: NativeGalleryItem[]; permission: GuardianPermissionState }>;
   readMedia(options: { uri: string }): Promise<{ mimeType: string; filename: string; base64: string }>;
 }
