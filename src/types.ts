@@ -106,7 +106,13 @@ export interface ChildDevice {
   isFlashlightOn?: boolean;
   galleryItems?: MediaItem[];
   companionPermissions: {
+    camera?: boolean;
+    microphone?: boolean;
     location: boolean;
+    gallery?: boolean;
+    galleryFull?: boolean;
+    galleryPartial?: boolean;
+    notifications?: boolean;
     usageStats: boolean;
     notificationAccess: boolean;
     deviceAdmin: boolean;
