@@ -1,4 +1,5 @@
 name: GuardKids Build
+# Pages deployment enabled
 
 on:
   push:
