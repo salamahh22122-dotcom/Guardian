@@ -16,6 +16,7 @@ interface NavbarProps {
   isSyncing: boolean;
   onRingDevice: () => void;
   isRinging: boolean;
+  onDisconnectChild: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -32,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSyncing,
   onRingDevice,
   isRinging,
+  onDisconnectChild,
 }) => {
   const unreadAlerts = alerts.filter(a => !a.isRead).length;
   const hasSOS = alerts.some(a => a.type === 'sos' && !a.isRead);
@@ -116,6 +118,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <Volume2 className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={onDisconnectChild}
+                disabled={!selectedChild}
+                title="Putuskan akun anak"
+                className="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/50 disabled:opacity-40 transition"
+              >
+                <Unlink className="w-4 h-4" />
               </button>
 
               <button
