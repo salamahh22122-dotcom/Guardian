@@ -30,6 +30,7 @@ export const ChildPairingGate: React.FC<ChildPairingGateProps> = ({ onPaired }) 
       );
       const childId = data?.child_id as string | undefined;
       if (!childId) throw new Error('Kode pemasangan tidak valid atau sudah kedaluwarsa.');
+      if (data?.user_id) localStorage.setItem('guardkids_user_id', String(data.user_id));
       localStorage.setItem('guardkids_paired_child_id', childId);
       const url = new URL(window.location.href);
       url.searchParams.delete('pairing');
