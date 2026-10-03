@@ -29,8 +29,9 @@ jobs:
           java-version: '21'
       - name: Install dependencies
         run: npm install
-      - name: Build web
+      - name: Build web for GitHub Pages
         env:
+          VITE_BASE: /Guardian/
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
@@ -39,6 +40,12 @@ jobs:
         with:
           name: GuardKids-web-dist
           path: dist
+      - name: Build Android web assets for Capacitor
+        env:
+          VITE_BASE: ./
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
       - name: Add Android platform
         run: npx cap add android
       - name: Sync Capacitor
