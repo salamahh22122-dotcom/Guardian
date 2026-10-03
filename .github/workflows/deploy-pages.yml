@@ -74,6 +74,8 @@ jobs:
         run: npm run build
       - name: Add Android platform
         run: npx cap add android
+      - name: Prepare native child permissions and gallery bridge
+        run: bash scripts/prepare-android.sh
       - name: Sync Capacitor
         run: npx cap sync android
       - name: Build debug APK
