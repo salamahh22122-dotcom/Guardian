@@ -276,6 +276,22 @@ export async function updateChild(childId: string, patch: Record<string, unknown
   if (error) throw error;
 }
 
+export async function disconnectChild(childId: string) {
+  const db = requireSupabase();
+  const { error } = await db.from('child_devices').update({
+    paired_user_id: null,
+    pairing_code_hash: null,
+    pairing_expires_at: null,
+    is_online: false,
+    is_camera_active: false,
+    is_screen_mirroring_active: false,
+    is_screen_mirroring_requested: false,
+    is_flashlight_on: false,
+    updated_at: currentIso(),
+  }).eq('id', childId);
+  if (error) throw error;
+}
+
 export async function updateAppUsage(appId: string, patch: Record<string, unknown>) {
   const db = requireSupabase();
   const { error } = await db.from('app_usages').update({ ...patch, updated_at: currentIso() }).eq('id', appId);
