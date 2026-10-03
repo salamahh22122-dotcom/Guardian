@@ -395,6 +395,7 @@ s=p.read_text()
 perms=[
 'android.permission.CAMERA',
 'android.permission.RECORD_AUDIO',
+'android.permission.MODIFY_AUDIO_SETTINGS',
 'android.permission.ACCESS_FINE_LOCATION',
 'android.permission.ACCESS_COARSE_LOCATION',
 'android.permission.POST_NOTIFICATIONS',
@@ -412,6 +413,12 @@ for perm in perms:
 legacy='    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />'
 if legacy not in s:
     s=s.replace('<application', legacy+'\n    <application', 1)
+feature_camera='    <uses-feature android:name="android.hardware.camera" android:required="false" />'
+feature_autofocus='    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />'
+if feature_camera not in s:
+    s=s.replace('<application', feature_camera+'\n    <application', 1)
+if feature_autofocus not in s:
+    s=s.replace('<application', feature_autofocus+'\n    <application', 1)
 service='      <service android:name=".GuardianConnectionService" android:exported="false" android:foregroundServiceType="dataSync" />'
 if service not in s:
     s=s.replace('</application>', service+'\n    </application>', 1)
