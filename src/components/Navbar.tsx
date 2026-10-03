@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Bell, RefreshCw, QrCode, Info, Volume2, LogOut, AlertTriangle } from 'lucide-react';
+import { Shield, Bell, RefreshCw, QrCode, Info, Volume2, LogOut, AlertTriangle, Unlink } from 'lucide-react';
 import { ChildDevice, AlertNotification } from '../types';
 
 interface NavbarProps {
