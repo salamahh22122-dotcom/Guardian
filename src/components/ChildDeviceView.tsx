@@ -83,7 +83,7 @@ export const ChildDeviceView: React.FC<ChildDeviceViewProps> = ({
                 ['Notifikasi', companionPermissions.notifications],
               ].map(([label, ok]) => <div key={String(label)} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800"><span className="text-slate-300">{label}</span><span className={ok?'text-emerald-400':'text-red-400'}>{ok?'Diizinkan':'Belum'}</span></div>)}
             </div>
-            {onSyncGallery && <button onClick={()=>void onSyncGallery()} className="mt-3 w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-semibold">{gallerySyncing?'Menyinkronkan galeri…':'Sinkronkan galeri sekarang'}</button>}
+            {onSyncGallery && <button onClick={()=>void onSyncGallery()} className="mt-3 w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-semibold">{gallerySyncing?'Meminta izin / menyinkronkan galeri…':'Izinkan & sinkronkan galeri'}</button>}
           </div>
         )}
 
