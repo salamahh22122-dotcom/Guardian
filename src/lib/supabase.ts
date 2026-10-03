@@ -1,7 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+// GuardKids uses its own Supabase project. The publishable key is safe for browser/mobile clients.
+// Keep environment overrides for deployment, but provide a production fallback so the APK
+// cannot silently build without a backend connection when GitHub Actions secrets are absent.
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://mxrffgfdygkawbzhrhbt.supabase.co';
+const supabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || 'sb_publishable_dGi335AHTBTqiihiYd-EIA_956EnECY';
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 const TOKEN_KEY = 'guardkids_session_token';
 
