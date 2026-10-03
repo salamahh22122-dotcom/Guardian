@@ -226,29 +226,6 @@ const ChildAgentScreen: React.FC<{ childId: string; onReset: () => void }> = ({ 
 };
 
 export default function App() {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const run = async () => {
-      try { const current = await getCurrentSession(); setSession(current); }
-      finally { setLoading(false); }
-    };
-    void run();
-    if (!isSupabaseConfigured) return;
-    const db = requireSupabase();
-    const { data: listener } = db.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  if (!isSupabaseConfigured) return <AuthScreen />;
-  if (isChildMode) return <ChildApp />;
-  if (loading) return <AppLoader />;
-  if (!session) return <AuthScreen />;
-  if (session.user?.is_anonymous) return <ChildPairingGate onPaired={() => undefined} />;
-  return <ParentApp userId={session.user.id} />;
-}
-export default function App() {
   const [session, setSession] = useState<{ user: { id: string } } | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
