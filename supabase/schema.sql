@@ -4,16 +4,16 @@
 create extension if not exists pgcrypto;
 
 create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
   full_name text not null default '',
-  role text not null default 'parent' check (role = 'parent'),
+  role text not null default 'parent' check (role in ('parent','child')),
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.child_devices (
   id uuid primary key default gen_random_uuid(),
   parent_id uuid not null references public.profiles(id) on delete cascade,
-  paired_user_id uuid unique references auth.users(id) on delete set null,
+  paired_user_id uuid unique references public.profiles(id) on delete set null,
   name text not null,
   age integer not null check (age between 0 and 21),
   avatar_color text not null default 'from-emerald-500 to-teal-600',
@@ -122,7 +122,7 @@ create table if not exists public.time_requests (
 create table if not exists public.device_commands (
   id uuid primary key default gen_random_uuid(),
   child_id uuid not null references public.child_devices(id) on delete cascade,
-  sender_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
+  sender_id uuid not null references public.profiles(id) default public.guardkids_current_user_id(),
   command text not null,
   payload jsonb not null default '{}'::jsonb,
   result jsonb not null default '{}'::jsonb,
@@ -184,7 +184,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  if (select auth.uid()) = old.paired_user_id then
+  if (select public.guardkids_current_user_id()) = old.paired_user_id then
     if new.id is distinct from old.id
       or new.parent_id is distinct from old.parent_id
       or new.paired_user_id is distinct from old.paired_user_id
@@ -222,33 +222,45 @@ create trigger child_devices_restrict_child_update
 before update on public.child_devices
 for each row execute function public.guardkids_restrict_child_device_update();
 
-revoke all on function public.guardkids_restrict_child_device_update() from public, anon, authenticated;
-revoke all on function public.guardkids_touch_updated_at() from public, anon, authenticated;
-revoke all on function public.handle_new_parent_profile() from public, anon, authenticated;
+revoke all on function public.guardkids_restrict_child_device_update() from public, anon, anon;
+revoke all on function public.guardkids_touch_updated_at() from public, anon, anon;
 
 drop trigger if exists app_usages_touch_updated_at on public.app_usages;
 create trigger app_usages_touch_updated_at
 before update on public.app_usages
 for each row execute function public.guardkids_touch_updated_at();
 
-create or replace function public.handle_new_parent_profile()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  insert into public.profiles(id, full_name, role)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name',''), 'parent')
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
+create table if not exists public.app_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_app_sessions_token_hash on public.app_sessions(token_hash);
+alter table public.app_sessions enable row level security;
+revoke all on public.app_sessions from anon;
 
-drop trigger if exists on_auth_user_created_guardkids on auth.users;
-create trigger on_auth_user_created_guardkids
-after insert on auth.users
-for each row execute function public.handle_new_parent_profile();
+alter table public.profiles add column if not exists email text;
+alter table public.profiles add column if not exists password_hash text;
+create unique index if not exists profiles_email_unique on public.profiles(lower(email)) where email is not null;
+
+create or replace function public.guardkids_current_user_id()
+returns uuid
+language plpgsql stable security definer
+set search_path = public, extensions, pg_catalog
+as $gk$
+declare token text; uid uuid;
+begin
+ token := current_setting('request.headers', true)::json->>'x-guardkids-session';
+ if token is null or token = '' then return null; end if;
+ select user_id into uid from public.app_sessions
+ where token_hash = encode(digest(token,'sha256'),'hex') and expires_at > now() limit 1;
+ return uid;
+end;
+$gk$;
+revoke all on function public.guardkids_current_user_id() from public;
+grant execute on function public.guardkids_current_user_id() to anon;
 
 alter table public.profiles enable row level security;
 alter table public.child_devices enable row level security;
@@ -262,31 +274,31 @@ alter table public.media_items enable row level security;
 alter table public.rtc_signals enable row level security;
 
 -- Explicit Data API grants; RLS remains the row-level authorization boundary.
-grant usage on schema public to authenticated;
-grant select, insert, update, delete on public.profiles to authenticated;
-grant select, insert, update, delete on public.child_devices to authenticated;
-grant select, insert on public.location_points to authenticated;
-grant select, insert, update, delete on public.safe_zones to authenticated;
-grant select, insert, update, delete on public.app_usages to authenticated;
-grant select, insert, update, delete on public.alerts to authenticated;
-grant select, insert, update on public.time_requests to authenticated;
-grant select, insert, update on public.device_commands to authenticated;
-grant select, insert, delete on public.media_items to authenticated;
-grant select, insert, delete on public.rtc_signals to authenticated;
+grant usage on schema public to anon;
+grant execute on function public.guardkids_current_user_id() to anon;
+grant select, insert, update, delete on public.profiles to anon;
+grant select, insert, update, delete on public.child_devices to anon;
+grant select, insert on public.location_points to anon;
+grant select, insert, update, delete on public.safe_zones to anon;
+grant select, insert, update, delete on public.app_usages to anon;
+grant select, insert, update, delete on public.alerts to anon;
+grant select, insert, update on public.time_requests to anon;
+grant select, insert, update on public.device_commands to anon;
+grant select, insert, delete on public.media_items to anon;
+grant select, insert, delete on public.rtc_signals to anon;
 
 -- Profiles: each signed-in account can read only itself.
 drop policy if exists "profile_select_self" on public.profiles;
-create policy "profile_select_self" on public.profiles for select to authenticated
-using ((select auth.uid()) = id);
+create policy "profile_select_self" on public.profiles for select to anon
+using ((select public.guardkids_current_user_id()) = id);
 
 drop policy if exists "profile_insert_self" on public.profiles;
-create policy "profile_insert_self" on public.profiles for insert to authenticated
-with check ((select auth.uid()) = id and role = 'parent');
+create policy "profile_insert_self" on public.profiles for insert to anon with check (id = public.guardkids_current_user_id());
 
 drop policy if exists "profile_update_self" on public.profiles;
-create policy "profile_update_self" on public.profiles for update to authenticated
-using ((select auth.uid()) = id)
-with check ((select auth.uid()) = id and role = 'parent');
+create policy "profile_update_self" on public.profiles for update to anon
+using ((select public.guardkids_current_user_id()) = id)
+with check ((select public.guardkids_current_user_id()) = id and role = 'parent');
 
 -- Parent owns the child record. The paired companion may read/update its own
 -- telemetry/state but cannot change ownership to another account because the
@@ -294,40 +306,40 @@ with check ((select auth.uid()) = id and role = 'parent');
 drop policy if exists "parents_manage_children" on public.child_devices;
 drop policy if exists "child_reads_own_device" on public.child_devices;
 drop policy if exists "child_updates_own_device" on public.child_devices;
-create policy "parents_manage_children" on public.child_devices for all to authenticated
-using ((select auth.uid()) = parent_id)
-with check ((select auth.uid()) = parent_id);
-create policy "child_reads_own_device" on public.child_devices for select to authenticated
-using ((select auth.uid()) = paired_user_id);
-create policy "child_updates_own_device" on public.child_devices for update to authenticated
-using ((select auth.uid()) = paired_user_id)
-with check ((select auth.uid()) = paired_user_id);
+create policy "parents_manage_children" on public.child_devices for all to anon
+using ((select public.guardkids_current_user_id()) = parent_id)
+with check ((select public.guardkids_current_user_id()) = parent_id);
+create policy "child_reads_own_device" on public.child_devices for select to anon
+using ((select public.guardkids_current_user_id()) = paired_user_id);
+create policy "child_updates_own_device" on public.child_devices for update to anon
+using ((select public.guardkids_current_user_id()) = paired_user_id)
+with check ((select public.guardkids_current_user_id()) = paired_user_id);
 
 -- Device telemetry/history is writable by the paired companion and readable by its parent.
 drop policy if exists "parents_or_child_locations" on public.location_points;
-create policy "parents_or_child_locations" on public.location_points for select to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and ((select auth.uid()) = c.parent_id or (select auth.uid()) = c.paired_user_id)));
-create policy "child_insert_locations" on public.location_points for insert to authenticated
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())));
+create policy "parents_or_child_locations" on public.location_points for select to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and ((select public.guardkids_current_user_id()) = c.parent_id or (select public.guardkids_current_user_id()) = c.paired_user_id)));
+create policy "child_insert_locations" on public.location_points for insert to anon
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())));
 
 -- Safe zones and app policies are parent-managed configuration.
 drop policy if exists "parents_or_child_safe_zones" on public.safe_zones;
-create policy "parents_manage_safe_zones" on public.safe_zones for all to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())))
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())));
+create policy "parents_manage_safe_zones" on public.safe_zones for all to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())))
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())));
 
-create policy "child_reads_safe_zones" on public.safe_zones for select to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())));
-create policy "child_updates_safe_zone_state" on public.safe_zones for update to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())))
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())));
+create policy "child_reads_safe_zones" on public.safe_zones for select to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())));
+create policy "child_updates_safe_zone_state" on public.safe_zones for update to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())))
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())));
 
 create or replace function public.guardkids_restrict_child_safe_zone_update()
 returns trigger
 language plpgsql
 as $$
 begin
-  if exists (select 1 from public.child_devices c where c.id = old.child_id and c.paired_user_id = (select auth.uid())) then
+  if exists (select 1 from public.child_devices c where c.id = old.child_id and c.paired_user_id = (select public.guardkids_current_user_id())) then
     if new.id is distinct from old.id
       or new.child_id is distinct from old.child_id
       or new.name is distinct from old.name
@@ -349,12 +361,12 @@ drop trigger if exists safe_zones_restrict_child_update on public.safe_zones;
 create trigger safe_zones_restrict_child_update
 before update on public.safe_zones
 for each row execute function public.guardkids_restrict_child_safe_zone_update();
-revoke all on function public.guardkids_restrict_child_safe_zone_update() from public, anon, authenticated;
+revoke all on function public.guardkids_restrict_child_safe_zone_update() from public, anon, anon;
 
 drop policy if exists "parents_or_child_app_usages" on public.app_usages;
-create policy "parents_manage_app_usages" on public.app_usages for all to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())))
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())));
+create policy "parents_manage_app_usages" on public.app_usages for all to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())))
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())));
 
 -- Alerts: parents read/manage their alerts; paired child may insert alerts into its parent's feed.
 drop policy if exists "parents_or_child_alerts" on public.alerts;
@@ -363,49 +375,49 @@ drop policy if exists "alerts_parent_update" on public.alerts;
 drop policy if exists "alerts_parent_delete" on public.alerts;
 drop policy if exists "alerts_parent_insert" on public.alerts;
 drop policy if exists "alerts_child_insert" on public.alerts;
-create policy "alerts_parent_select" on public.alerts for select to authenticated
-using ((select auth.uid()) = parent_id);
-create policy "alerts_parent_update" on public.alerts for update to authenticated
-using ((select auth.uid()) = parent_id)
-with check ((select auth.uid()) = parent_id);
-create policy "alerts_parent_delete" on public.alerts for delete to authenticated
-using ((select auth.uid()) = parent_id);
-create policy "alerts_parent_insert" on public.alerts for insert to authenticated
-with check ((select auth.uid()) = parent_id and exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())));
-create policy "alerts_child_insert" on public.alerts for insert to authenticated
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid()) and c.parent_id = parent_id));
+create policy "alerts_parent_select" on public.alerts for select to anon
+using ((select public.guardkids_current_user_id()) = parent_id);
+create policy "alerts_parent_update" on public.alerts for update to anon
+using ((select public.guardkids_current_user_id()) = parent_id)
+with check ((select public.guardkids_current_user_id()) = parent_id);
+create policy "alerts_parent_delete" on public.alerts for delete to anon
+using ((select public.guardkids_current_user_id()) = parent_id);
+create policy "alerts_parent_insert" on public.alerts for insert to anon
+with check ((select public.guardkids_current_user_id()) = parent_id and exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())));
+create policy "alerts_child_insert" on public.alerts for insert to anon
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id()) and c.parent_id = parent_id));
 
 -- Time requests: paired child creates; parent reads/resolves.
 drop policy if exists "parents_or_child_requests" on public.time_requests;
 drop policy if exists "time_requests_parent_select" on public.time_requests;
 drop policy if exists "time_requests_parent_update" on public.time_requests;
 drop policy if exists "time_requests_child_insert" on public.time_requests;
-create policy "time_requests_parent_select" on public.time_requests for select to authenticated
-using ((select auth.uid()) = parent_id);
-create policy "time_requests_parent_update" on public.time_requests for update to authenticated
-using ((select auth.uid()) = parent_id)
-with check ((select auth.uid()) = parent_id);
-create policy "time_requests_child_insert" on public.time_requests for insert to authenticated
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid()) and c.parent_id = parent_id));
+create policy "time_requests_parent_select" on public.time_requests for select to anon
+using ((select public.guardkids_current_user_id()) = parent_id);
+create policy "time_requests_parent_update" on public.time_requests for update to anon
+using ((select public.guardkids_current_user_id()) = parent_id)
+with check ((select public.guardkids_current_user_id()) = parent_id);
+create policy "time_requests_child_insert" on public.time_requests for insert to anon
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id()) and c.parent_id = parent_id));
 
 -- Commands: parents create; both sides read their own relationship; child acknowledges.
 drop policy if exists "commands_parent_or_paired_child" on public.device_commands;
-create policy "commands_parent_or_paired_child" on public.device_commands for select to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and ((select auth.uid()) = c.parent_id or (select auth.uid()) = c.paired_user_id)));
+create policy "commands_parent_or_paired_child" on public.device_commands for select to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and ((select public.guardkids_current_user_id()) = c.parent_id or (select public.guardkids_current_user_id()) = c.paired_user_id)));
 drop policy if exists "commands_parent_insert" on public.device_commands;
-create policy "commands_parent_insert" on public.device_commands for insert to authenticated
-with check (sender_id = (select auth.uid()) and exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())));
+create policy "commands_parent_insert" on public.device_commands for insert to anon
+with check (sender_id = (select public.guardkids_current_user_id()) and exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())));
 drop policy if exists "commands_child_ack" on public.device_commands;
-create policy "commands_child_ack" on public.device_commands for update to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())))
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())));
+create policy "commands_child_ack" on public.device_commands for update to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())))
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())));
 
 create or replace function public.guardkids_restrict_child_command_update()
 returns trigger
 language plpgsql
 as $$
 begin
-  if exists (select 1 from public.child_devices c where c.id = old.child_id and c.paired_user_id = (select auth.uid())) then
+  if exists (select 1 from public.child_devices c where c.id = old.child_id and c.paired_user_id = (select public.guardkids_current_user_id())) then
     if new.id is distinct from old.id
       or new.child_id is distinct from old.child_id
       or new.sender_id is distinct from old.sender_id
@@ -425,59 +437,59 @@ create trigger device_commands_restrict_child_update
 before update on public.device_commands
 for each row execute function public.guardkids_restrict_child_command_update();
 
-revoke all on function public.guardkids_restrict_child_command_update() from public, anon, authenticated;
+revoke all on function public.guardkids_restrict_child_command_update() from public, anon, anon;
 
 -- Media: parent reads/deletes; paired child uploads.
 drop policy if exists "media_parent_or_child" on public.media_items;
 drop policy if exists "media_parent_select" on public.media_items;
 drop policy if exists "media_parent_delete" on public.media_items;
 drop policy if exists "media_child_insert" on public.media_items;
-create policy "media_parent_select" on public.media_items for select to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())));
-create policy "media_parent_delete" on public.media_items for delete to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select auth.uid())));
-create policy "media_child_insert" on public.media_items for insert to authenticated
-with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select auth.uid())));
+create policy "media_parent_select" on public.media_items for select to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())));
+create policy "media_parent_delete" on public.media_items for delete to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and c.parent_id = (select public.guardkids_current_user_id())));
+create policy "media_child_insert" on public.media_items for insert to anon
+with check (exists (select 1 from public.child_devices c where c.id = child_id and c.paired_user_id = (select public.guardkids_current_user_id())));
 
 -- RTC signaling: parent and child may create/read signaling only for their relationship.
 drop policy if exists "rtc_parent_or_child" on public.rtc_signals;
-create policy "rtc_parent_or_child" on public.rtc_signals for select to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and ((select auth.uid()) = c.parent_id or (select auth.uid()) = c.paired_user_id)));
-create policy "rtc_insert_parent_or_child" on public.rtc_signals for insert to authenticated
+create policy "rtc_parent_or_child" on public.rtc_signals for select to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and ((select public.guardkids_current_user_id()) = c.parent_id or (select public.guardkids_current_user_id()) = c.paired_user_id)));
+create policy "rtc_insert_parent_or_child" on public.rtc_signals for insert to anon
 with check (
-  exists (select 1 from public.child_devices c where c.id = child_id and ((select auth.uid()) = c.parent_id or (select auth.uid()) = c.paired_user_id))
-  and sender_role = case when (select auth.uid()) = (select parent_id from public.child_devices where id = child_id) then 'parent' else 'child' end
+  exists (select 1 from public.child_devices c where c.id = child_id and ((select public.guardkids_current_user_id()) = c.parent_id or (select public.guardkids_current_user_id()) = c.paired_user_id))
+  and sender_role = case when (select public.guardkids_current_user_id()) = (select parent_id from public.child_devices where id = child_id) then 'parent' else 'child' end
 );
 
 drop policy if exists "rtc_delete_parent_or_child" on public.rtc_signals;
-create policy "rtc_delete_parent_or_child" on public.rtc_signals for delete to authenticated
-using (exists (select 1 from public.child_devices c where c.id = child_id and ((select auth.uid()) = c.parent_id or (select auth.uid()) = c.paired_user_id)));
+create policy "rtc_delete_parent_or_child" on public.rtc_signals for delete to anon
+using (exists (select 1 from public.child_devices c where c.id = child_id and ((select public.guardkids_current_user_id()) = c.parent_id or (select public.guardkids_current_user_id()) = c.paired_user_id)));
 
 -- Storage: private bucket, scoped to the child folder.
 insert into storage.buckets (id, name, public) values ('guardkids-media', 'guardkids-media', false) on conflict (id) do update set public = false;
 
 drop policy if exists "guardkids_media_select" on storage.objects;
-create policy "guardkids_media_select" on storage.objects for select to authenticated
+create policy "guardkids_media_select" on storage.objects for select to anon
 using (bucket_id = 'guardkids-media' and exists (
   select 1 from public.child_devices c
   where c.id::text = (storage.foldername(name))[1]
-  and ((select auth.uid()) = c.parent_id or (select auth.uid()) = c.paired_user_id)
+  and ((select public.guardkids_current_user_id()) = c.parent_id or (select public.guardkids_current_user_id()) = c.paired_user_id)
 ));
 
 drop policy if exists "guardkids_media_insert" on storage.objects;
-create policy "guardkids_media_insert" on storage.objects for insert to authenticated
+create policy "guardkids_media_insert" on storage.objects for insert to anon
 with check (bucket_id = 'guardkids-media' and exists (
   select 1 from public.child_devices c
   where c.id::text = (storage.foldername(name))[1]
-  and c.paired_user_id = (select auth.uid())
+  and c.paired_user_id = (select public.guardkids_current_user_id())
 ));
 
 drop policy if exists "guardkids_media_delete" on storage.objects;
-create policy "guardkids_media_delete" on storage.objects for delete to authenticated
+create policy "guardkids_media_delete" on storage.objects for delete to anon
 using (bucket_id = 'guardkids-media' and exists (
   select 1 from public.child_devices c
   where c.id::text = (storage.foldername(name))[1]
-  and c.parent_id = (select auth.uid())
+  and c.parent_id = (select public.guardkids_current_user_id())
 ));
 
 -- Realtime must watch the persisted data used by the two clients.
@@ -499,3 +511,48 @@ begin
     alter publication supabase_realtime add table public.rtc_signals;
   end if;
 end $$;
+
+-- Custom application registration/login/pairing helpers; Supabase Auth is not used.
+create or replace function public.guardkids_register(p_email text,p_password text,p_full_name text)
+returns jsonb language plpgsql security definer set search_path=public,extensions,pg_catalog
+as $gk$
+declare uid uuid; token text;
+begin
+ if length(trim(p_email))<5 or position('@' in p_email)=0 then raise exception 'Email tidak valid'; end if;
+ if length(p_password)<8 then raise exception 'Password minimal 8 karakter'; end if;
+ if exists(select 1 from profiles where lower(email)=lower(trim(p_email))) then raise exception 'Email sudah terdaftar'; end if;
+ insert into profiles(email,password_hash,full_name,role) values(lower(trim(p_email)),crypt(p_password,gen_salt('bf')),trim(p_full_name),'parent') returning id into uid;
+ token:=encode(gen_random_bytes(32),'hex');
+ insert into app_sessions(user_id,token_hash,expires_at) values(uid,encode(digest(token,'sha256'),'hex'),now()+interval '30 days');
+ return jsonb_build_object('user_id',uid,'session_token',token,'full_name',trim(p_full_name),'role','parent');
+end $gk$;
+
+create or replace function public.guardkids_login(p_email text,p_password text)
+returns jsonb language plpgsql security definer set search_path=public,extensions,pg_catalog
+as $gk$
+declare u profiles%rowtype; token text;
+begin
+ select * into u from profiles where lower(email)=lower(trim(p_email)) and role='parent' limit 1;
+ if u.id is null or u.password_hash is null or crypt(p_password,u.password_hash)<>u.password_hash then raise exception 'Email atau password salah'; end if;
+ token:=encode(gen_random_bytes(32),'hex');
+ insert into app_sessions(user_id,token_hash,expires_at) values(u.id,encode(digest(token,'sha256'),'hex'),now()+interval '30 days');
+ return jsonb_build_object('user_id',u.id,'session_token',token,'full_name',u.full_name,'role',u.role);
+end $gk$;
+
+create or replace function public.guardkids_pair_child(p_pairing_code text,p_device_model text,p_os_version text)
+returns jsonb language plpgsql security definer set search_path=public,extensions,pg_catalog
+as $gk$
+declare c child_devices%rowtype; uid uuid; token text;
+begin
+ select * into c from child_devices where pairing_code_hash=encode(digest(trim(p_pairing_code),'sha256'),'hex') and pairing_expires_at>now() and paired_user_id is null limit 1;
+ if c.id is null then raise exception 'Kode pemasangan tidak valid atau sudah kedaluwarsa'; end if;
+ insert into profiles(full_name,role) values(c.name||' • Companion','child') returning id into uid;
+ update child_devices set paired_user_id=uid,device_model=coalesce(nullif(trim(p_device_model),''),device_model),os_version=coalesce(nullif(trim(p_os_version),''),os_version),pairing_code_hash=null,pairing_expires_at=null,is_online=true,last_seen_at=now(),updated_at=now() where id=c.id;
+ token:=encode(gen_random_bytes(32),'hex');
+ insert into app_sessions(user_id,token_hash,expires_at) values(uid,encode(digest(token,'sha256'),'hex'),now()+interval '90 days');
+ return jsonb_build_object('child_id',c.id,'session_token',token);
+end $gk$;
+
+grant execute on function public.guardkids_register(text,text,text) to anon;
+grant execute on function public.guardkids_login(text,text) to anon;
+grant execute on function public.guardkids_pair_child(text,text,text) to anon;
