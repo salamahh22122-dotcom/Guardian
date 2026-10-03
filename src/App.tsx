@@ -18,7 +18,7 @@ import { PrivacyGuideModal } from './components/PrivacyGuideModal';
 import { AuthScreen } from './components/AuthScreen';
 import { ChildPairingGate } from './components/ChildPairingGate';
 import { useChildAgent } from './hooks/useChildAgent';
-import { getCurrentSession, requireSupabase, isSupabaseConfigured } from './lib/supabase';
+import { getCurrentSession, signOut, requireSupabase, isSupabaseConfigured } from './lib/supabase';
 import {
   clearAlerts,
   insertSafeZone,
@@ -91,7 +91,7 @@ const ParentApp: React.FC<{ userId: string }> = ({ userId }) => {
 
   const selectedChild = useMemo(() => childrenList.find((c) => c.id === selectedChildId) || null, [childrenList, selectedChildId]);
 
-  const signOut = async () => { await requireSupabase().auth.signOut(); };
+  
 
   const patchChild = async (patch: Record<string, unknown>, message: string, command?: { name: string; payload?: Record<string, unknown> }) => {
     if (!selectedChild) return;
@@ -246,5 +246,17 @@ export default function App() {
   if (loading) return <AppLoader />;
   if (!session) return <AuthScreen />;
   if (session.user?.is_anonymous) return <ChildPairingGate onPaired={() => undefined} />;
+  return <ParentApp userId={session.user.id} />;
+}
+export default function App() {
+  const [session, setSession] = useState<{ user: { id: string } } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    void getCurrentSession().then(setSession).finally(() => setLoading(false));
+  }, []);
+  if (!isSupabaseConfigured) return <AuthScreen />;
+  if (isChildMode) return <ChildApp />;
+  if (loading) return <AppLoader />;
+  if (!session) return <AuthScreen />;
   return <ParentApp userId={session.user.id} />;
 }
