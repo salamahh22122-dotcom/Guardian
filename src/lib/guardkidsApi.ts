@@ -242,7 +242,8 @@ export async function renewPairingCode(childId: string): Promise<string> {
 
 export async function loadPairedChild(childId: string): Promise<ChildDevice | null> {
   const db = requireSupabase();
-  const { data, error } = await db.from('child_devices').select(DEVICE_COLUMNS).eq('id', childId).single();
+  // A disconnected device must no longer be able to load or operate the child profile.
+  const { data, error } = await db.from('child_devices').select(DEVICE_COLUMNS).eq('id', childId).eq('paired_user_id', localStorage.getItem('guardkids_user_id') || '__unpaired__').single();
   if (error) {
     if ((error as any).code === 'PGRST116') return null;
     throw error;
