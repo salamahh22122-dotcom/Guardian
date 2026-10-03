@@ -1,0 +1,10 @@
+{
+  "name": "GuardKids",
+  "description": "Production parental control portal with a real Supabase backend and device companion.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation",
+    "display-capture"
+  ]
+}
