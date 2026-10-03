@@ -4,8 +4,14 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  // GitHub Pages needs an absolute repository base, while Capacitor's
+  // Android WebView must use relative asset URLs. The build workflow
+  // explicitly sets VITE_BASE for each target.
+  const base = process.env.VITE_BASE
+    || (process.env.GITHUB_ACTIONS === 'true' ? '/Guardian/' : './');
+
   return {
-    base: process.env.GITHUB_ACTIONS === 'true' ? '/Guardian/' : '/',
+    base,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
