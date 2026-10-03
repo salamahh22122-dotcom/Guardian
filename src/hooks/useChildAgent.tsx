@@ -10,7 +10,9 @@ import {
   updateSafeZoneFromAgent,
   uploadMedia,
   updateChildFromAgent,
+  uploadNativeMedia,
 } from '../lib/guardkidsApi';
+import { GuardianNative, isNativeAndroid, type GuardianPermissionState } from '../lib/guardianNative';
 import { GuardKidsRtcSession, captureCamera, captureScreen, setTorch, type RtcKind } from '../lib/webrtc';
 import type { ChildDevice } from '../types';
 
@@ -63,6 +65,8 @@ export function useChildAgent(childId: string) {
   const [pairedLoading, setPairedLoading] = useState(true);
   const [activeMediaKind, setActiveMediaKind] = useState<RtcKind | null>(null);
   const [mediaPreviewStream, setMediaPreviewStream] = useState<MediaStream | null>(null);
+  const [permissionState, setPermissionState] = useState<GuardianPermissionState | null>(null);
+  const [gallerySyncing, setGallerySyncing] = useState(false);
 
   const mirrorSession = useRef<GuardKidsRtcSession | null>(null);
   const cameraSession = useRef<GuardKidsRtcSession | null>(null);
@@ -189,7 +193,66 @@ export function useChildAgent(childId: string) {
     }
   }, [childId, refresh]);
 
+  const requestDevicePermissions = useCallback(async () => {
+    try {
+      if (isNativeAndroid()) {
+        await GuardianNative.requestPermissions();
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        const status = await GuardianNative.getPermissionStatus();
+        setPermissionState(status);
+        await updateChildFromAgent(childId, { companion_permissions: status });
+        await refresh();
+        return status;
+      }
+      const next: any = { camera:false, microphone:false, location:false, notifications:false, gallery:false, galleryFull:false, galleryPartial:false };
+      if (navigator.mediaDevices?.getUserMedia) {
+        try { const stream = await navigator.mediaDevices.getUserMedia({video:true,audio:true}); stream.getTracks().forEach(t=>t.stop()); next.camera=true; next.microphone=true; } catch {}
+      }
+      if (navigator.geolocation) {
+        await new Promise<void>(resolve => navigator.geolocation.getCurrentPosition(()=>{next.location=true;resolve()},()=>resolve(),{enableHighAccuracy:true,timeout:10000}));
+      }
+      if ('Notification' in window) { try { next.notifications = (await Notification.requestPermission()) === 'granted'; } catch {} }
+      setPermissionState(next);
+      await updateChildFromAgent(childId, { companion_permissions: next });
+      await refresh();
+      return next;
+    } catch (e:any) { setError(e?.message || 'Izin perangkat tidak dapat diminta.'); return null; }
+  }, [childId, refresh]);
+
+  const syncNativeGallery = useCallback(async () => {
+    if (!isNativeAndroid() || gallerySyncing) return;
+    setGallerySyncing(true);
+    try {
+      const result = await GuardianNative.getGallery({limit:40});
+      setPermissionState(result.permission);
+      await updateChildFromAgent(childId, {companion_permissions:result.permission});
+      for (const item of result.items) {
+        try {
+          const media = await GuardianNative.readMedia({uri:item.uri});
+          await uploadNativeMedia(childId,item.sourceId,item.filename,media.mimeType || item.mimeType,media.base64,'camera',item.createdAt);
+        } catch (e) { console.warn('Gallery media sync failed',item.sourceId,e); }
+      }
+      await refresh();
+    } catch (e) { console.warn('Native gallery sync failed',e); }
+    finally { setGallerySyncing(false); }
+  }, [childId, gallerySyncing, refresh]);
+
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    let cancelled=false;
+    const initPermissions=async()=>{
+      try {
+        if (!isNativeAndroid()) return;
+        const status=await GuardianNative.getPermissionStatus();
+        if(!cancelled) setPermissionState(status);
+        if(!status.camera || !status.microphone || !status.location || !status.gallery || !status.notifications) await requestDevicePermissions();
+        await syncNativeGallery();
+      } catch(e){ console.warn('Permission initialization failed',e); }
+    };
+    void initPermissions();
+    return ()=>{cancelled=true;};
+  }, [requestDevicePermissions, syncNativeGallery]);
 
   useEffect(() => {
     let channel: any;
@@ -264,6 +327,12 @@ export function useChildAgent(childId: string) {
     }
     return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
   }, [childId]);
+
+  useEffect(() => {
+    if (!isNativeAndroid()) return;
+    const id=window.setInterval(()=>{void syncNativeGallery();},120000);
+    return ()=>window.clearInterval(id);
+  }, [syncNativeGallery]);
 
   useEffect(() => {
     let cleanup = false;
@@ -411,6 +480,7 @@ export function useChildAgent(childId: string) {
 
   return {
     child, error, pairedLoading, pendingMedia, ringing, activeMediaKind, mediaPreviewStream,
-    refresh, acceptMedia, declineMedia, sendSos, requestExtraTime, uploadGallery,
+    permissionState, gallerySyncing,
+    refresh, acceptMedia, declineMedia, sendSos, requestExtraTime, uploadGallery, requestDevicePermissions, syncNativeGallery,
   };
 }
