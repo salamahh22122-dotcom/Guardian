@@ -18,6 +18,10 @@ interface ChildDeviceViewProps {
   onDeclineMedia: () => Promise<void>;
   onUploadGallery: (file: File, category: MediaItem['category']) => Promise<void>;
   onRefresh: () => Promise<void>;
+  companionPermissions?: Record<string, boolean> | null;
+  gallerySyncing?: boolean;
+  onRequestPermissions?: () => Promise<unknown> | void;
+  onSyncGallery?: () => Promise<void> | void;
 }
 
 export const ChildDeviceView: React.FC<ChildDeviceViewProps> = ({
@@ -62,6 +66,25 @@ export const ChildDeviceView: React.FC<ChildDeviceViewProps> = ({
           <div className="grid grid-cols-3 gap-2 mt-4 text-[10px]
           "><div className="rounded-xl bg-slate-900 border border-slate-800 p-2 text-center"><Battery className="w-3.5 h-3.5 mx-auto text-emerald-400 mb-1" />{child.batteryLevel > 0 ? `${child.batteryLevel}%` : '—'}</div><div className="rounded-xl bg-slate-900 border border-slate-800 p-2 text-center"><MapPin className="w-3.5 h-3.5 mx-auto text-sky-400 mb-1" />GPS</div><div className="rounded-xl bg-slate-900 border border-slate-800 p-2 text-center"><Wifi className="w-3.5 h-3.5 mx-auto text-teal-400 mb-1" />Online</div></div>
         </div>
+
+        {companionPermissions && (
+          <div className="mx-5 mb-4 p-4 rounded-2xl bg-slate-900 border border-slate-800">
+            <div className="flex items-center justify-between gap-3">
+              <div><div className="text-xs font-bold text-white">Izin perangkat</div><div className="text-[10px] text-slate-500 mt-1">Aktifkan agar fitur orang tua dapat bekerja.</div></div>
+              <button onClick={()=>void onRequestPermissions?.()} className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-bold">Izinkan / Perbarui</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3 text-[10px]">
+              {[
+                ['Kamera', companionPermissions.camera],
+                ['Mikrofon', companionPermissions.microphone],
+                ['Lokasi', companionPermissions.location],
+                ['Galeri', companionPermissions.galleryFull || companionPermissions.gallery],
+                ['Notifikasi', companionPermissions.notifications],
+              ].map(([label, ok]) => <div key={String(label)} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800"><span className="text-slate-300">{label}</span><span className={ok?'text-emerald-400':'text-red-400'}>{ok?'Diizinkan':'Belum'}</span></div>)}
+            </div>
+            {onSyncGallery && <button onClick={()=>void onSyncGallery()} className="mt-3 w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-semibold">{gallerySyncing?'Menyinkronkan galeri…':'Sinkronkan galeri sekarang'}</button>}
+          </div>
+        )}
 
         {(pendingMedia || ringing || activeMediaKind) && (
           <div className="mx-5 mb-4 space-y-3">
