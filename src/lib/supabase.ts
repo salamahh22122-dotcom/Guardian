@@ -1,41 +1,61 @@
-import { createClient, type SupabaseClient, type Session, type User } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
+const TOKEN_KEY = 'guardkids_session_token';
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabasePublishableKey!, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    })
-  : null;
+let supabase: SupabaseClient | null = null;
+function buildClient(token?: string) {
+  if (!isSupabaseConfigured) return null;
+  return createClient(supabaseUrl!, supabasePublishableKey!, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: token ? { 'x-guardkids-session': token } : {} },
+  });
+}
+export function setSessionToken(token: string | null) {
+  if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
+  supabase = buildClient(token || undefined);
+}
+if (typeof window !== 'undefined') supabase = buildClient(localStorage.getItem(TOKEN_KEY) || undefined);
+export { supabase };
 
 export function requireSupabase(): SupabaseClient {
-  if (!supabase) {
-    throw new Error('Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.');
-  }
+  if (!supabase) throw new Error('Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.');
   return supabase;
 }
+export function currentIso(): string { return new Date().toISOString(); }
 
-export function currentIso(): string {
-  return new Date().toISOString();
-}
-
-export async function getCurrentSession(): Promise<Session | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase.auth.getSession();
+export async function registerParent(email: string, password: string, fullName: string) {
+  const db = buildClient();
+  if (!db) throw new Error('Supabase belum dikonfigurasi.');
+  const { data, error } = await db.rpc('guardkids_register', { p_email: email.trim(), p_password: password, p_full_name: fullName.trim() });
   if (error) throw error;
-  return data.session;
+  setSessionToken(data.session_token);
+  return data;
 }
-
-export async function getCurrentUser(): Promise<User | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase.auth.getUser();
+export async function loginParent(email: string, password: string) {
+  const db = buildClient();
+  if (!db) throw new Error('Supabase belum dikonfigurasi.');
+  const { data, error } = await db.rpc('guardkids_login', { p_email: email.trim(), p_password: password });
   if (error) throw error;
-  return data.user;
+  setSessionToken(data.session_token);
+  return data;
+}
+export function signOut() { setSessionToken(null); }
+export async function getCurrentSession(): Promise<{ user: { id: string } } | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('profiles').select('id').maybeSingle();
+  if (error || !data?.id) { setSessionToken(null); return null; }
+  return { user: { id: data.id } };
+}
+export async function pairChild(pairingCode: string, deviceModel: string, osVersion: string) {
+  const db = buildClient();
+  if (!db) throw new Error('Supabase belum dikonfigurasi.');
+  const { data, error } = await db.rpc('guardkids_pair_child', {
+    p_pairing_code: pairingCode, p_device_model: deviceModel, p_os_version: osVersion
+  });
+  if (error) throw error;
+  setSessionToken(data.session_token);
+  return data;
 }
