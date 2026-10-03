@@ -29,6 +29,7 @@ import {
   resolveTimeRequest,
   sendCommand,
   updateChild,
+  disconnectChild,
 } from './lib/guardkidsApi';
 import type { AlertNotification, ChildDevice, SafeZone, TimeRequest } from './types';
 
@@ -176,6 +177,22 @@ const ParentApp: React.FC<{ userId: string }> = ({ userId }) => {
   const reject = async (id: string) => { await resolveTimeRequest(id, 'rejected'); await refresh(); showToast('Permintaan tambahan waktu ditolak.'); };
   const refreshLocation = async () => { await refresh(); };
 
+  const disconnectSelectedChild = async () => {
+    if (!selectedChild) return;
+    const confirmed = window.confirm(
+      `Putuskan akun anak "${selectedChild.name}" dari perangkat ini? Perangkat anak akan langsung kehilangan akses ke akun tersebut dan harus dipasangkan ulang dengan kode baru.`
+    );
+    if (!confirmed) return;
+    try {
+      await disconnectChild(selectedChild.id);
+      setActiveTab('dashboard');
+      showToast(`Akun ${selectedChild.name} berhasil diputuskan.`);
+      await refresh();
+    } catch (e: any) {
+      showToast(e?.message || 'Gagal memutuskan akun anak.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {toast && <div className="fixed bottom-5 right-5 z-[70] bg-slate-900 border border-emerald-500/50 text-white px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold">{toast}</div>}
@@ -183,7 +200,7 @@ const ParentApp: React.FC<{ userId: string }> = ({ userId }) => {
         childrenList={childrenList} selectedChild={selectedChild} onSelectChild={(child) => setSelectedChildId(child.id)}
         activeTab={activeTab} setActiveTab={setActiveTab} alerts={alerts} onOpenPairing={() => setPairingOpen(true)}
         onOpenPrivacyGuide={() => setPrivacyOpen(true)} onRefreshSync={refresh} isSyncing={isSyncing} onRingDevice={ringDevice}
-        isRinging={isRinging} onSignOut={() => void signOut()}
+        isRinging={isRinging} onDisconnectChild={() => void disconnectSelectedChild()} onSignOut={() => void signOut()}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
