@@ -46,7 +46,12 @@ export async function sha256(value: string): Promise<string> {
 
 function fallbackPermissions() {
   return {
+    camera: false,
+    microphone: false,
     location: false,
+    gallery: false,
+    galleryFull: false,
+    galleryPartial: false,
     usageStats: false,
     notificationAccess: false,
     deviceAdmin: false,
@@ -363,6 +368,56 @@ export async function clearAlerts(parentId: string) {
   const db = requireSupabase();
   const { error } = await db.from('alerts').delete().eq('parent_id', parentId);
   if (error) throw error;
+}
+
+export async function uploadNativeMedia(
+  childId: string,
+  sourceId: string,
+  filename: string,
+  mimeType: string,
+  base64: string,
+  category: MediaItem['category'] = 'camera',
+  createdAt?: number,
+) {
+  const db = requireSupabase();
+  const existing = await db.from('media_items').select('id').eq('child_id', childId).eq('source_id', sourceId).maybeSingle();
+  if (existing.error) throw existing.error;
+  if (existing.data?.id) return { skipped: true, id: existing.data.id };
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const file = new File([bytes], filename || 'media', { type: mimeType || 'application/octet-stream' });
+  if (file.size > 25 * 1024 * 1024) return { skipped: true, reason: 'too_large' };
+
+  const mediaId = crypto.randomUUID();
+  const safeName = (filename || 'media').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${childId}/gallery_${mediaId}_${safeName}`;
+  const { error: uploadError } = await db.storage.from('guardkids-media').upload(path, file, {
+    cacheControl: '3600', contentType: mimeType || undefined, upsert: false,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await db.from('media_items').insert({
+    id: mediaId,
+    child_id: childId,
+    source_id: sourceId,
+    filename: filename || safeName,
+    category,
+    media_type: mimeType?.startsWith('video/') ? 'video' : 'image',
+    storage_path: path,
+    title: filename || safeName,
+    file_size: formatBytes(file.size),
+    created_at: createdAt ? new Date(createdAt).toISOString() : undefined,
+    ai_safety_score: 'warning',
+    ai_safety_tag: 'Belum dianalisis',
+  }).select('*').single();
+  if (error) {
+    await db.storage.from('guardkids-media').remove([path]);
+    if ((error as any).code === '23505') return { skipped: true, reason: 'duplicate' };
+    throw error;
+  }
+  return data;
 }
 
 export async function uploadMedia(childId: string, file: File, category: MediaItem['category']) {
