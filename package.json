@@ -3,25 +3,22 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "tsc --noEmit",
-    "clean": "rm -rf dist"
-  },
+  "scripts": {"dev":"vite --port=3000 --host=0.0.0.0","build":"vite build","preview":"vite preview","lint":"tsc --noEmit","clean":"rm -rf dist"},
   "dependencies": {
+    "@capacitor/android": "9.0.0",
+    "@capacitor/core": "9.0.0",
     "@supabase/supabase-js": "2.117.2",
     "@tailwindcss/vite": "4.3.3",
     "@vitejs/plugin-react": "6.1.1",
     "lucide-react": "0.546.0",
+    "motion": "12.23.24",
     "qrcode": "1.5.4",
     "react": "19.0.1",
     "react-dom": "19.0.1",
-    "vite": "8.3.0",
-    "motion": "12.23.24"
+    "vite": "8.3.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "9.0.0",
     "@types/node": "22.14.0",
     "@types/qrcode": "1.5.6",
     "@types/react": "19.3.0",
