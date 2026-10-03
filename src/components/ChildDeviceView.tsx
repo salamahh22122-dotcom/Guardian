@@ -27,6 +27,7 @@ interface ChildDeviceViewProps {
 export const ChildDeviceView: React.FC<ChildDeviceViewProps> = ({
   child, pendingMedia, ringing, activeMediaKind, mediaPreviewStream, onSendSOS,
   onRequestTime, onAcceptMedia, onDeclineMedia, onUploadGallery, onRefresh,
+  companionPermissions, gallerySyncing, onRequestPermissions, onSyncGallery,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
