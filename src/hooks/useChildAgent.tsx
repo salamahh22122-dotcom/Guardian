@@ -223,7 +223,18 @@ export function useChildAgent(childId: string) {
     if (!isNativeAndroid() || gallerySyncing) return;
     setGallerySyncing(true);
     try {
-      const result = await GuardianNative.getGallery({limit:40});
+      let result;
+      try {
+        result = await GuardianNative.getGallery({limit:40});
+      } catch {
+        result = { items: [], permission: await GuardianNative.requestGalleryPermissions() };
+        if (!result.permission.gallery) {
+          setPermissionState(result.permission);
+          await updateChildFromAgent(childId, { companion_permissions: result.permission });
+          return;
+        }
+        result = await GuardianNative.getGallery({limit:40});
+      }
       setPermissionState(result.permission);
       await updateChildFromAgent(childId, {companion_permissions:result.permission});
       for (const item of result.items) {
@@ -246,8 +257,7 @@ export function useChildAgent(childId: string) {
         if (!isNativeAndroid()) return;
         const status=await GuardianNative.getPermissionStatus();
         if(!cancelled) setPermissionState(status);
-        if(!status.camera || !status.microphone || !status.location || !status.gallery || !status.notifications) await requestDevicePermissions();
-        await syncNativeGallery();
+        if(!status.camera || !status.microphone || !status.location || !status.notifications) await requestDevicePermissions();
       } catch(e){ console.warn('Permission initialization failed',e); }
     };
     void initPermissions();
@@ -333,6 +343,14 @@ export function useChildAgent(childId: string) {
     const id=window.setInterval(()=>{void syncNativeGallery();},120000);
     return ()=>window.clearInterval(id);
   }, [syncNativeGallery]);
+
+  useEffect(() => {
+    if (!isNativeAndroid()) return;
+    const token = localStorage.getItem('guardkids_session_token');
+    if (!token) return;
+    void GuardianNative.startConnection({ childId, sessionToken: token }).catch((e) => console.warn('Persistent connection start failed', e));
+    return () => { /* keep the native service alive when the WebView is closed */ };
+  }, [childId]);
 
   useEffect(() => {
     let cleanup = false;
