@@ -19,7 +19,6 @@ import android.os.Build;
 import android.provider.MediaStore;
 import android.util.Base64;
 
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
@@ -27,43 +26,40 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+import com.getcapacitor.annotation.PluginMethod;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 
-@CapacitorPlugin(name = "GuardianNative")
+@CapacitorPlugin(name = "GuardianNative", permissions = {
+  @Permission(alias = "camera", strings = { Manifest.permission.CAMERA }),
+  @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO }),
+  @Permission(alias = "location", strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }),
+  @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS }),
+  @Permission(alias = "mediaModern", strings = { Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED }),
+  @Permission(alias = "mediaLegacy", strings = { Manifest.permission.READ_EXTERNAL_STORAGE })
+})
 public class GuardianNativePlugin extends Plugin {
-  private static final int PERMISSION_REQUEST = 7412;
-
   @PluginMethod
   public void requestPermissions(PluginCall call) {
-    ArrayList<String> permissions = new ArrayList<>();
-    permissions.add(Manifest.permission.CAMERA);
-    permissions.add(Manifest.permission.RECORD_AUDIO);
-    permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
-    permissions.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+    ArrayList<String> aliases = new ArrayList<>();
+    aliases.add("camera");
+    aliases.add("microphone");
+    aliases.add("location");
     if (Build.VERSION.SDK_INT >= 33) {
-      permissions.add(Manifest.permission.READ_MEDIA_IMAGES);
-      permissions.add(Manifest.permission.READ_MEDIA_VIDEO);
-      if (Build.VERSION.SDK_INT >= 34) {
-        permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED);
-      }
-      permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+      aliases.add("mediaModern");
+      aliases.add("notifications");
     } else {
-      permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+      aliases.add("mediaLegacy");
     }
-    ArrayList<String> missing = new ArrayList<>();
-    for (String permission : permissions) {
-      if (Build.VERSION.SDK_INT < 33 && permission.equals(Manifest.permission.POST_NOTIFICATIONS)) continue;
-      if (ContextCompat.checkSelfPermission(getContext(), permission) != PackageManager.PERMISSION_GRANTED) {
-        missing.add(permission);
-      }
-    }
-    if (!missing.isEmpty()) {
-      ActivityCompat.requestPermissions(getActivity(), missing.toArray(new String[0]), PERMISSION_REQUEST);
-    }
+    requestPermissionForAliases(aliases.toArray(new String[0]), call, "permissionCallback");
+  }
+
+  @PermissionCallback
+  private void permissionCallback(PluginCall call) {
     call.resolve(getPermissionState());
   }
 
@@ -107,7 +103,7 @@ public class GuardianNativePlugin extends Plugin {
     int limit = Math.max(1, Math.min(call.getInt("limit", 50), 100));
     ContentResolver resolver = getContext().getContentResolver();
     Uri collection = MediaStore.Files.getContentUri("external");
-    String[] projection = new String[] {
+    String[] projection = {
       MediaStore.Files.FileColumns._ID,
       MediaStore.Files.FileColumns.DISPLAY_NAME,
       MediaStore.Files.FileColumns.MIME_TYPE,
@@ -116,7 +112,7 @@ public class GuardianNativePlugin extends Plugin {
       MediaStore.Files.FileColumns.MEDIA_TYPE
     };
     String selection = MediaStore.Files.FileColumns.MEDIA_TYPE + "=? OR " + MediaStore.Files.FileColumns.MEDIA_TYPE + "=?";
-    String[] args = new String[] {
+    String[] args = {
       String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE),
       String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
     };
