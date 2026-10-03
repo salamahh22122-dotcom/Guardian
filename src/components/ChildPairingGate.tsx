@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { KeyRound, Loader2, Shield, Smartphone, WifiOff } from 'lucide-react';
-import { requireSupabase } from '../lib/supabase';
+import { pairChild } from '../lib/supabase';
 
 interface ChildPairingGateProps {
   onPaired: (childId: string) => void;
@@ -23,26 +23,12 @@ export const ChildPairingGate: React.FC<ChildPairingGateProps> = ({ onPaired }) 
     if (!/^\d{3}-\d{3}$/.test(normalized)) { setError('Kode harus berformat 123-456.'); return; }
     setBusy(true); setError(null); setMessage(null);
     try {
-      const supabase = requireSupabase();
-      let session = (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        const anon = await supabase.auth.signInAnonymously();
-        if (anon.error) throw anon.error;
-        session = anon.data.session;
-      }
-      if (!session) throw new Error('Sesi perangkat tidak tersedia.');
-
-      const { data, error } = await supabase.functions.invoke('pair-child', {
-        body: {
-          pairingCode: normalized,
-          device: {
-            model: navigator.userAgent.slice(0, 180),
-            osVersion: navigator.platform,
-          },
-        },
-      });
-      if (error) throw error;
-      const childId = data?.childId as string | undefined;
+      const data = await pairChild(
+        normalized,
+        navigator.userAgent.slice(0, 180),
+        navigator.platform
+      );
+      const childId = data?.child_id as string | undefined;
       if (!childId) throw new Error('Kode pemasangan tidak valid atau sudah kedaluwarsa.');
       localStorage.setItem('guardkids_paired_child_id', childId);
       const url = new URL(window.location.href);
