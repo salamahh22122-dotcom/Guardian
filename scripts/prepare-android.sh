@@ -64,6 +64,20 @@ public class GuardianNativePlugin extends Plugin {
   }
 
   @PluginMethod
+  public void requestGalleryPermissions(PluginCall call) {
+    if (Build.VERSION.SDK_INT >= 33) {
+      requestPermissionForAlias("mediaModern", call, "galleryPermissionCallback");
+    } else {
+      requestPermissionForAlias("mediaLegacy", call, "galleryPermissionCallback");
+    }
+  }
+
+  @PermissionCallback
+  private void galleryPermissionCallback(PluginCall call) {
+    call.resolve(getPermissionState());
+  }
+
+  @PluginMethod
   public void getPermissionStatus(PluginCall call) {
     call.resolve(getPermissionState());
   }
@@ -92,6 +106,28 @@ public class GuardianNativePlugin extends Plugin {
 
   private boolean granted(String permission) {
     return ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED;
+  }
+
+  @PluginMethod
+  public void startConnection(PluginCall call) {
+    String childId = call.getString("childId", "");
+    String token = call.getString("sessionToken", "");
+    if (childId.isEmpty() || token.isEmpty()) {
+      call.reject("Identitas perangkat tidak lengkap");
+      return;
+    }
+    Intent intent = new Intent(getContext(), GuardianConnectionService.class);
+    intent.putExtra("child_id", childId);
+    intent.putExtra("session_token", token);
+    if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(intent);
+    else getContext().startService(intent);
+    call.resolve();
+  }
+
+  @PluginMethod
+  public void stopConnection(PluginCall call) {
+    getContext().stopService(new Intent(getContext(), GuardianConnectionService.class));
+    call.resolve();
   }
 
   @PluginMethod
@@ -214,6 +250,130 @@ public class GuardianNativePlugin extends Plugin {
 }
 JAVA
 
+cat > "$JAVA_DIR/GuardianConnectionService.java" <<'JAVA'
+package com.guardkids.app;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.Service;
+import android.content.Intent;
+import android.os.Build;
+import android.os.Handler;
+import android.os.IBinder;
+import android.util.Log;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
+public class GuardianConnectionService extends Service {
+  private static final String CHANNEL_ID = "guardkids_connection";
+  private static final int NOTIFICATION_ID = 4101;
+  private static final long INTERVAL_MS = 30000L;
+  private final Handler handler = new Handler();
+  private final Runnable heartbeat = new Runnable() {
+    @Override public void run() {
+      sendHeartbeat();
+      handler.postDelayed(this, INTERVAL_MS);
+    }
+  };
+
+  @Override public void onCreate() {
+    super.onCreate();
+    createChannel();
+    Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+      ? new Notification.Builder(this, CHANNEL_ID)
+      : new Notification.Builder(this);
+    Notification notification = builder
+      .setSmallIcon(android.R.drawable.ic_popup_sync)
+      .setContentTitle("GuardKids")
+      .setContentText("Perangkat anak tetap terhubung")
+      .setOngoing(true)
+      .setOnlyAlertOnce(true)
+      .build();
+    if (Build.VERSION.SDK_INT >= 29) {
+      startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+    } else {
+      startForeground(NOTIFICATION_ID, notification);
+    }
+  }
+
+  @Override public int onStartCommand(Intent intent, int flags, int startId) {
+    if (intent != null) {
+      String childId = intent.getStringExtra("child_id");
+      String token = intent.getStringExtra("session_token");
+      if (childId != null && token != null) {
+        getSharedPreferences("guardkids_connection", MODE_PRIVATE).edit()
+          .putString("child_id", childId).putString("session_token", token).apply();
+      }
+    }
+    handler.removeCallbacks(heartbeat);
+    handler.post(heartbeat);
+    return START_STICKY;
+  }
+
+  private void sendHeartbeat() {
+    String childId = getSharedPreferences("guardkids_connection", MODE_PRIVATE).getString("child_id", "");
+    String token = getSharedPreferences("guardkids_connection", MODE_PRIVATE).getString("session_token", "");
+    if (childId.isEmpty() || token.isEmpty()) return;
+    HttpURLConnection connection = null;
+    try {
+      URL url = new URL("https://mxrffgfdygkawbzhrhbt.supabase.co/rest/v1/rpc/guardkids_heartbeat");
+      connection = (HttpURLConnection) url.openConnection();
+      connection.setRequestMethod("POST");
+      connection.setConnectTimeout(10000);
+      connection.setReadTimeout(10000);
+      connection.setRequestProperty("Content-Type", "application/json");
+      connection.setRequestProperty("apikey", "sb_publishable_dGi335AHTBTqiihiYd-EIA_956EnECY");
+      connection.setRequestProperty("x-guardkids-session", token);
+      connection.setDoOutput(true);
+      byte[] body = ("{\"p_child_id\":\"" + childId + "\"}").getBytes(StandardCharsets.UTF_8);
+      try (OutputStream out = connection.getOutputStream()) { out.write(body); }
+      int code = connection.getResponseCode();
+      if (code >= 200 && code < 300) {
+        StringBuilder response = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+          String line; while ((line = reader.readLine()) != null) response.append(line);
+        }
+        if (response.toString().contains("false")) stopSelf();
+      } else if (code == 401 || code == 403 || code == 404 || code == 409) {
+        stopSelf();
+      }
+    } catch (Exception e) {
+      Log.w("GuardKids", "Heartbeat failed", e);
+    } finally {
+      if (connection != null) connection.disconnect();
+    }
+  }
+
+  private void createChannel() {
+    if (Build.VERSION.SDK_INT >= 26) {
+      NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Koneksi perangkat", NotificationManager.IMPORTANCE_LOW);
+      channel.setDescription("Menjaga koneksi perangkat anak tetap aktif saat aplikasi ditutup.");
+      channel.setShowBadge(false);
+      NotificationManager manager = getSystemService(NotificationManager.class);
+      if (manager != null) manager.createNotificationChannel(channel);
+    }
+  }
+
+  @Override public void onTaskRemoved(Intent rootIntent) {
+    // Keep the connection service alive when the WebView task is swiped away.
+    super.onTaskRemoved(rootIntent);
+  }
+
+  @Override public void onDestroy() {
+    handler.removeCallbacksAndMessages(null);
+    super.onDestroy();
+  }
+
+  @Override public IBinder onBind(Intent intent) { return null; }
+}
+JAVA
+
 MAIN="$JAVA_DIR/MainActivity.java"
 if [ -f "$MAIN" ] && ! grep -q "GuardianNativePlugin" "$MAIN"; then
   python3 - "$MAIN" <<'PY'
@@ -241,7 +401,7 @@ perms=[
 for perm in perms:
     line=f'    <uses-permission android:name="{perm}" />'
     if line not in s:
-        s=s.replace('<application', line+'\n    <application',1)
+        s=s.replace('    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n<application', line+'\n    <application',1)
 legacy='    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />'
 if legacy not in s:
     s=s.replace('<application', legacy+'\n    <application',1)
