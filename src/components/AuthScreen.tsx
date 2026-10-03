@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LockKeyhole, Shield, UserPlus, LogIn, Loader2, Mail, User } from 'lucide-react';
-import { isSupabaseConfigured, requireSupabase } from '../lib/supabase';
+import { isSupabaseConfigured, registerParent, loginParent } from '../lib/supabase';
 
 export const AuthScreen: React.FC = () => {
   const [isSignup, setIsSignup] = useState(false);
@@ -15,17 +15,12 @@ export const AuthScreen: React.FC = () => {
     event.preventDefault();
     setBusy(true); setMessage(null); setError(null);
     try {
-      const supabase = requireSupabase();
       if (isSignup) {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(), password,
-          options: { data: { full_name: fullName.trim() } },
-        });
-        if (error) throw error;
-        if (!data.session) setMessage('Akun dibuat. Verifikasi email bila project Supabase Anda mewajibkannya, lalu masuk.');
+        await registerParent(email, password, fullName);
+        setMessage('Akun berhasil dibuat dan langsung aktif. Silakan gunakan portal.');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (error) throw error;
+        await loginParent(email, password);
+        window.location.reload();
       }
     } catch (e: any) {
       setError(e?.message || 'Autentikasi gagal.');
