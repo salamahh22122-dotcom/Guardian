@@ -18,6 +18,11 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Keep the Android WebView bundle compatible with older device WebViews.
+      target: 'es2019',
+      cssTarget: 'chrome80',
+    },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
