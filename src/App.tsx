@@ -3,7 +3,7 @@
  * Real device data is stored in Supabase; no embedded sample state remains.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, LogOut, Plus, Shield, Smartphone } from 'lucide-react';
+import { AlertTriangle, Loader2, Plus, Shield, Smartphone } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { ParentDashboard } from './components/ParentDashboard';
 import { ScreenTimeManager } from './components/ScreenTimeManager';
@@ -239,7 +239,7 @@ const ChildAgentScreen: React.FC<{ childId: string; onReset: () => void }> = ({ 
   if (agent.pairedLoading && !agent.child) return <AppLoader label="Menghubungkan perangkat…" />;
   if (!agent.child) return <div className="min-h-screen bg-slate-950 flex items-center justify-center p-5"><div className="max-w-md w-full bg-slate-900 border border-red-500/30 rounded-3xl p-6 text-center"><div className="text-red-300 text-sm font-bold">Perangkat tidak terhubung</div><p className="text-xs text-slate-500 mt-2">{agent.error || 'Hubungan dengan server tidak tersedia.'}</p><button onClick={onReset} className="mt-5 px-4 py-2 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold">Pasangkan ulang</button></div></div>;
 
-  return <div className="min-h-screen bg-slate-950 text-slate-100"><div className="max-w-xl mx-auto px-3 pt-3 flex justify-end"><button onClick={()=>void agent.refresh()} className="text-[10px] text-slate-500 hover:text-emerald-400">Segarkan</button><button onClick={onReset} className="ml-3 text-[10px] text-slate-500 hover:text-red-400 flex items-center gap-1"><LogOut className="w-3 h-3" />Lepas perangkat</button></div><main className="px-3 pb-10"><ChildDeviceView child={agent.child} pendingMedia={agent.pendingMedia} ringing={agent.ringing} activeMediaKind={agent.activeMediaKind} mediaPreviewStream={agent.mediaPreviewStream} onSendSOS={agent.sendSos} onRequestTime={agent.requestExtraTime} onAcceptMedia={async()=>{try{await agent.acceptMedia();}catch(e:any){window.alert(e?.message||'Izin media gagal.');}}} onDeclineMedia={agent.declineMedia} onUploadGallery={agent.uploadGallery} onRefresh={agent.refresh} companionPermissions={agent.permissionState || agent.child.companionPermissions} gallerySyncing={agent.gallerySyncing} onRequestPermissions={agent.requestDevicePermissions} onSyncGallery={agent.syncNativeGallery} /></main></div>;
+  return <div className="min-h-screen bg-slate-950 text-slate-100"><div className="max-w-xl mx-auto px-3 pt-3 flex justify-end"><button onClick={()=>void agent.refresh()} className="text-[10px] text-slate-500 hover:text-emerald-400">Segarkan</button></div><main className="px-3 pb-10"><ChildDeviceView child={agent.child} pendingMedia={agent.pendingMedia} ringing={agent.ringing} activeMediaKind={agent.activeMediaKind} mediaPreviewStream={agent.mediaPreviewStream} onSendSOS={agent.sendSos} onRequestTime={agent.requestExtraTime} onAcceptMedia={async()=>{try{await agent.acceptMedia();}catch(e:any){window.alert(e?.message||'Izin media gagal.');}}} onDeclineMedia={agent.declineMedia} onUploadGallery={agent.uploadGallery} onRefresh={agent.refresh} companionPermissions={agent.permissionState || agent.child.companionPermissions} gallerySyncing={agent.gallerySyncing} onRequestPermissions={agent.requestDevicePermissions} onSyncGallery={agent.syncNativeGallery} /></main></div>;
 };
 
 export default function App() {
