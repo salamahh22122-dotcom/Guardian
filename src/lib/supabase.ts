@@ -7,6 +7,7 @@ const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
 const supabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || 'sb_publishable_dGi335AHTBTqiihiYd-EIA_956EnECY';
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 const TOKEN_KEY = 'guardkids_session_token';
+const USER_ID_KEY = 'guardkids_user_id';
 
 let supabase: SupabaseClient | null = null;
 function buildClient(token?: string) {
@@ -16,8 +17,9 @@ function buildClient(token?: string) {
     global: { headers: token ? { 'x-guardkids-session': token } : {} },
   });
 }
-export function setSessionToken(token: string | null) {
+export function setSessionToken(token: string | null, userId?: string | null) {
   if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
+  if (userId) localStorage.setItem(USER_ID_KEY, userId); else if (!token) localStorage.removeItem(USER_ID_KEY);
   supabase = buildClient(token || undefined);
 }
 if (typeof window !== 'undefined') supabase = buildClient(localStorage.getItem(TOKEN_KEY) || undefined);
@@ -34,7 +36,7 @@ export async function registerParent(email: string, password: string, fullName: 
   if (!db) throw new Error('Supabase belum dikonfigurasi.');
   const { data, error } = await db.rpc('guardkids_register', { p_email: email.trim(), p_password: password, p_full_name: fullName.trim() });
   if (error) throw error;
-  setSessionToken(data.session_token);
+  setSessionToken(data.session_token, data.user_id);
   return data;
 }
 export async function loginParent(email: string, password: string) {
@@ -42,15 +44,20 @@ export async function loginParent(email: string, password: string) {
   if (!db) throw new Error('Supabase belum dikonfigurasi.');
   const { data, error } = await db.rpc('guardkids_login', { p_email: email.trim(), p_password: password });
   if (error) throw error;
-  setSessionToken(data.session_token);
+  setSessionToken(data.session_token, data.user_id);
   return data;
 }
 export function signOut() { setSessionToken(null); }
 export async function getCurrentSession(): Promise<{ user: { id: string } } | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase.from('profiles').select('id').maybeSingle();
-  if (error || !data?.id) { setSessionToken(null); return null; }
-  return { user: { id: data.id } };
+  if (typeof window === 'undefined') return null;
+  const token = localStorage.getItem(TOKEN_KEY);
+  const userId = localStorage.getItem(USER_ID_KEY);
+  if (!token || !userId) return null;
+  // Do not invalidate a valid-looking local session merely because the profile
+  // lookup is temporarily unavailable during app startup. RLS still enforces
+  // the token's real identity on every protected query.
+  if (!supabase) supabase = buildClient(token);
+  return { user: { id: userId } };
 }
 export async function pairChild(pairingCode: string, deviceModel: string, osVersion: string) {
   const db = buildClient();
@@ -59,6 +66,6 @@ export async function pairChild(pairingCode: string, deviceModel: string, osVers
     p_pairing_code: pairingCode, p_device_model: deviceModel, p_os_version: osVersion
   });
   if (error) throw error;
-  setSessionToken(data.session_token);
+  setSessionToken(data.session_token, data.user_id);
   return data;
 }
