@@ -1,0 +1,30 @@
+name: Extract Guardian Source
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    if: contains(github.event.head_commit.message, '[skip ci]') == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Extract source ZIP
+        run: |
+          mkdir -p /tmp/guardian-src
+          unzip -q guardian-shield-no-gemini-deploy.zip -d /tmp/guardian-src
+          cp -a /tmp/guardian-src/. .
+          rm -f guardian-shield-no-gemini-deploy.zip
+      - name: Commit extracted source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Extract Guardian application source [skip ci]"
+          git push
