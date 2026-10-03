@@ -1,4 +1,4 @@
-name: Deploy GuardKids to GitHub Pages
+name: GuardKids Web Build
 
 on:
   push:
@@ -7,44 +7,28 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: web-build
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Install dependencies
-        run: npm install
-      - name: Build
+      - run: npm install
+      - name: Build web app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_CHILD_APP_URL: ${{ secrets.VITE_CHILD_APP_URL }}
-          VITE_TURN_URLS: ${{ secrets.VITE_TURN_URLS }}
-          VITE_TURN_USERNAME: ${{ secrets.VITE_TURN_USERNAME }}
-          VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
         run: npm run build
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
         with:
-          path: ./dist
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          name: GuardKids-web-dist
+          path: dist
