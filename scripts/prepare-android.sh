@@ -393,18 +393,28 @@ from pathlib import Path
 p=Path(__import__('sys').argv[1])
 s=p.read_text()
 perms=[
-'android.permission.CAMERA','android.permission.RECORD_AUDIO',
-'android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION',
-'android.permission.POST_NOTIFICATIONS','android.permission.READ_MEDIA_IMAGES',
-'android.permission.READ_MEDIA_VIDEO','android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+'android.permission.CAMERA',
+'android.permission.RECORD_AUDIO',
+'android.permission.ACCESS_FINE_LOCATION',
+'android.permission.ACCESS_COARSE_LOCATION',
+'android.permission.POST_NOTIFICATIONS',
+'android.permission.READ_MEDIA_IMAGES',
+'android.permission.READ_MEDIA_VIDEO',
+'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+'android.permission.FOREGROUND_SERVICE',
+'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
 ]
 for perm in perms:
     line=f'    <uses-permission android:name="{perm}" />'
     if line not in s:
-        s=s.replace('    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n<application', line+'\n    <application',1)
+        marker='<application'
+        s=s.replace(marker, line+'\n    '+marker, 1)
 legacy='    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />'
 if legacy not in s:
-    s=s.replace('<application', legacy+'\n    <application',1)
+    s=s.replace('<application', legacy+'\n    <application', 1)
+service='      <service android:name=".GuardianConnectionService" android:exported="false" android:foregroundServiceType="dataSync" />'
+if service not in s:
+    s=s.replace('</application>', service+'\n    </application>', 1)
 p.write_text(s)
 PY
 fi
