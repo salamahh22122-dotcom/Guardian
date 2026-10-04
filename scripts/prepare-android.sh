@@ -376,7 +376,7 @@ public class GuardianConnectionService extends Service {
 JAVA
 
 MAIN="$JAVA_DIR/MainActivity.java"
-if [ ! -f "$MAIN" ]; then
+if true; then
 cat > "$MAIN" <<'JAVA'
 package com.guardkids.app;
 
@@ -401,7 +401,6 @@ public class MainActivity extends BridgeActivity {
 
   private void installGuardianWebPermissions() {
     WebView webView = getBridge().getWebView();
-    super.onStart();
     final WebChromeClient existing = webView.getWebChromeClient();
     webView.setWebChromeClient(new WebChromeClient() {
       @Override
