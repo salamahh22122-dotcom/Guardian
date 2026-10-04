@@ -212,7 +212,7 @@ const ParentApp: React.FC<{ userId: string }> = ({ userId }) => {
             {activeTab === 'dashboard' && <ParentDashboard child={selectedChild} alerts={alerts} timeRequests={timeRequests} onToggleLock={toggleLock} onRingDevice={ringDevice} isRinging={isRinging} onApproveRequest={approve} onRejectRequest={reject} onToggleBlockApp={toggleBlockApp} onNavigateTab={(tab) => tab === 'compliance' ? setPrivacyOpen(true) : setActiveTab(tab)} />}
             {activeTab === 'mirror' && <ScreenMirrorView child={selectedChild} onRequestMirror={requestMirror} onStopMirror={stopMirror} />}
             {activeTab === 'camera' && <RemoteCameraView child={selectedChild} onToggleCamera={toggleCamera} onSwitchFacing={switchFacing} onToggleFlashlight={toggleFlashlight} />}
-            {activeTab === 'gallery' && <GalleryMonitorView child={selectedChild} onRefresh={refresh} />}
+            {activeTab === 'gallery' && <GalleryMonitorView child={selectedChild} onRefresh={refresh} onSyncGallery={async()=>{ await sendCommand(selectedChild.id, 'sync_gallery'); showToast('Permintaan sinkronisasi galeri dikirim.'); }} />}
             {activeTab === 'screentime' && <ScreenTimeManager child={selectedChild} onUpdateLimit={updateLimit} onUpdateBedtime={updateBedtime} onToggleBlockApp={toggleBlockApp} onUpdateAppLimit={updateAppLimit} onUpdateLockMessage={updateLockMessage} />}
             {activeTab === 'location' && <LocationTracker child={selectedChild} onAddSafeZone={addSafeZone} onRefreshLocation={refreshLocation} />}
             {activeTab === 'alerts' && <AlertsManager alerts={alerts} timeRequests={timeRequests} onApproveRequest={approve} onRejectRequest={reject} onMarkAllAsRead={markAllRead} onClearAlerts={clearAll} />}
