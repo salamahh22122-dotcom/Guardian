@@ -128,7 +128,7 @@ const ParentApp: React.FC<{ userId: string }> = ({ userId }) => {
   const toggleCamera = async (sessionId?: string) => {
     if (!selectedChild) return;
     if (sessionId) {
-      await patchChild({ is_camera_active: false }, 'Permintaan kamera dikirim. Perangkat anak harus menyetujui izin browser.', { name: 'request_camera', payload: { sessionId } });
+      await patchChild({ is_camera_active: false }, 'Permintaan kamera dikirim ke aplikasi anak.', { name: 'request_camera', payload: { sessionId } });
     } else {
       await sendCommand(selectedChild.id, 'stop_camera');
       await updateChild(selectedChild.id, { is_camera_active: false, is_flashlight_on: false });
