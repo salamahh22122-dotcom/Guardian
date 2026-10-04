@@ -52,7 +52,6 @@ export const AuthScreen: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-5">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl">
-        <button type="button" onClick={() => setRole(null)} className="text-xs text-slate-500 hover:text-emerald-400 mb-4">← Ganti jalur login</button>
           <div className="flex items-center gap-3 mb-8">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
               <Shield className="w-7 h-7 text-slate-950" />
@@ -77,6 +76,7 @@ export const AuthScreen: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-5">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl">
+        <button type="button" onClick={() => setRole(null)} className="text-xs text-slate-500 hover:text-emerald-400 mb-4">← Ganti jalur login</button>
         <div className="flex items-center gap-3 mb-7">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
             <Shield className="w-7 h-7 text-slate-950" />
