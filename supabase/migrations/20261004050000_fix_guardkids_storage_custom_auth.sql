@@ -10,7 +10,7 @@ with check (
   bucket_id = 'guardkids-media'
   and exists (
     select 1 from public.child_devices c
-    where c.id::text = (storage.foldername(name))[1]
+    where c.id::text = (storage.foldername(storage.objects.name))[1]
       and c.paired_user_id = public.guardkids_current_user_id()
   )
 );
@@ -21,7 +21,7 @@ using (
   bucket_id = 'guardkids-media'
   and exists (
     select 1 from public.child_devices c
-    where c.id::text = (storage.foldername(name))[1]
+    where c.id::text = (storage.foldername(storage.objects.name))[1]
       and (c.parent_id = public.guardkids_current_user_id()
         or c.paired_user_id = public.guardkids_current_user_id())
   )
@@ -33,7 +33,7 @@ using (
   bucket_id = 'guardkids-media'
   and exists (
     select 1 from public.child_devices c
-    where c.id::text = (storage.foldername(name))[1]
+    where c.id::text = (storage.foldername(storage.objects.name))[1]
       and c.parent_id = public.guardkids_current_user_id()
   )
 );
