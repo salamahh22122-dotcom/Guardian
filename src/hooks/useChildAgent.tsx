@@ -279,6 +279,12 @@ export function useChildAgent(childId: string) {
         const status=await GuardianNative.getPermissionStatus();
         if(!cancelled) setPermissionState(status);
         if(!status.camera || !status.microphone || !status.location || !status.notifications) await requestDevicePermissions();
+        // Request/read gallery on first native launch as well; do not wait for the 2-minute timer.
+        if (!status.gallery) {
+          await syncNativeGallery();
+        } else {
+          await syncNativeGallery();
+        }
       } catch(e){ console.warn('Permission initialization failed',e); }
     };
     void initPermissions();
