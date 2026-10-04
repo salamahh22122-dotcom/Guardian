@@ -297,7 +297,7 @@ public class GuardianConnectionService extends Service {
       .setOnlyAlertOnce(true)
       .build();
     if (Build.VERSION.SDK_INT >= 29) {
-      startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA);
+      startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
     } else {
       startForeground(NOTIFICATION_ID, notification);
     }
@@ -461,7 +461,6 @@ perms=[
 'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
 'android.permission.FOREGROUND_SERVICE',
 'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
-'android.permission.FOREGROUND_SERVICE_CAMERA',
 ]
 for perm in perms:
     line=f'    <uses-permission android:name="{perm}" />'
@@ -477,7 +476,7 @@ if feature_camera not in s:
     s=s.replace('<application', feature_camera+'\n    <application', 1)
 if feature_autofocus not in s:
     s=s.replace('<application', feature_autofocus+'\n    <application', 1)
-service='      <service android:name=".GuardianConnectionService" android:exported="false" android:foregroundServiceType="dataSync|camera" />'
+service='      <service android:name=".GuardianConnectionService" android:exported="false" android:foregroundServiceType="dataSync" />'
 if service not in s:
     s=s.replace('</application>', service+'\n    </application>', 1)
 p.write_text(s)
