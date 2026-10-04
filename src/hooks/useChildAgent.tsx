@@ -112,6 +112,27 @@ export function useChildAgent(childId: string) {
             ? { is_camera_active: false }
             : { is_screen_mirroring_requested: true });
         }
+        try {
+          if (type === 'request_camera' && isNativeAndroid()) {
+            const status = await GuardianNative.getPermissionStatus();
+            if (!status.camera) {
+              const next = await GuardianNative.requestPermissions();
+              setPermissionState(next);
+              if (!next.camera) throw new Error('Izin kamera Android belum diberikan.');
+            }
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          await acceptMedia();
+        } catch (mediaError: any) {
+          setPendingMedia(null);
+          await acknowledgeCommand(command.id, 'rejected', { error: mediaError?.message || 'Akses media gagal.' });
+          if (type === 'request_camera') {
+            await updateChildFromAgent(childId, { is_camera_active: false });
+          } else {
+            await updateChildFromAgent(childId, { is_screen_mirroring_requested: false, is_screen_mirroring_active: false });
+          }
+          setError(mediaError?.message || 'Akses media gagal.');
+        }
         return;
       }
 
@@ -191,7 +212,7 @@ export function useChildAgent(childId: string) {
       await acknowledgeCommand(command.id, 'rejected', { error: e?.message || 'Command gagal' }).catch(() => undefined);
       setError(e?.message || 'Perintah perangkat gagal dijalankan.');
     }
-  }, [childId, refresh]);
+  }, [acceptMedia, childId, refresh]);
 
   const requestDevicePermissions = useCallback(async () => {
     try {
