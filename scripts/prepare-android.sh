@@ -297,7 +297,7 @@ public class GuardianConnectionService extends Service {
       .setOnlyAlertOnce(true)
       .build();
     if (Build.VERSION.SDK_INT >= 29) {
-      startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+      startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA);
     } else {
       startForeground(NOTIFICATION_ID, notification);
     }
@@ -394,9 +394,14 @@ import com.guardkids.app.GuardianNativePlugin;
 public class MainActivity extends BridgeActivity {
   public MainActivity() { registerPlugin(GuardianNativePlugin.class); }
   @Override
-  public void onStart() {
-    super.onStart();
+  public void onCreate(android.os.Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    installGuardianWebPermissions();
+  }
+
+  private void installGuardianWebPermissions() {
     WebView webView = getBridge().getWebView();
+    super.onStart();
     final WebChromeClient existing = webView.getWebChromeClient();
     webView.setWebChromeClient(new WebChromeClient() {
       @Override
@@ -416,6 +421,12 @@ public class MainActivity extends BridgeActivity {
         });
       }
     });
+  }
+
+  @Override
+  public void onStart() {
+    super.onStart();
+    installGuardianWebPermissions();
   }
 }
 JAVA
@@ -450,6 +461,7 @@ perms=[
 'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
 'android.permission.FOREGROUND_SERVICE',
 'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+'android.permission.FOREGROUND_SERVICE_CAMERA',
 ]
 for perm in perms:
     line=f'    <uses-permission android:name="{perm}" />'
@@ -465,7 +477,7 @@ if feature_camera not in s:
     s=s.replace('<application', feature_camera+'\n    <application', 1)
 if feature_autofocus not in s:
     s=s.replace('<application', feature_autofocus+'\n    <application', 1)
-service='      <service android:name=".GuardianConnectionService" android:exported="false" android:foregroundServiceType="dataSync" />'
+service='      <service android:name=".GuardianConnectionService" android:exported="false" android:foregroundServiceType="dataSync|camera" />'
 if service not in s:
     s=s.replace('</application>', service+'\n    </application>', 1)
 p.write_text(s)
