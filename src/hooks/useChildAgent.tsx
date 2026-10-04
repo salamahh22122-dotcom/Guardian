@@ -218,6 +218,13 @@ export function useChildAgent(childId: string) {
         return;
       }
 
+      if (type === 'sync_gallery') {
+        await acknowledgeCommand(command.id, 'accepted');
+        await syncNativeGallery();
+        await acknowledgeCommand(command.id, 'completed');
+        return;
+      }
+
       if (type === 'block_app' || type === 'unblock_app' || type === 'set_app_limit') {
         await acknowledgeCommand(command.id, 'rejected', {
           error: 'Kontrol aplikasi sistem memerlukan companion Android native; browser tidak dapat mengelola aplikasi terpasang di perangkat.'
@@ -245,7 +252,7 @@ export function useChildAgent(childId: string) {
       await acknowledgeCommand(command.id, 'rejected', { error: e?.message || 'Command gagal' }).catch(() => undefined);
       setError(e?.message || 'Perintah perangkat gagal dijalankan.');
     }
-  }, [acceptMedia, childId, refresh]);
+  }, [acceptMedia, childId, refresh, syncNativeGallery]);
 
   const requestDevicePermissions = useCallback(async () => {
     try {
