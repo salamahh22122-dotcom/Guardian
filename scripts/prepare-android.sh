@@ -389,8 +389,10 @@ import android.webkit.WebView;
 import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.BridgeActivity;
+import com.guardkids.app.GuardianNativePlugin;
 
 public class MainActivity extends BridgeActivity {
+  public MainActivity() { registerPlugin(GuardianNativePlugin.class); }
   @Override
   public void onStart() {
     super.onStart();
