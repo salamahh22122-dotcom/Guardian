@@ -90,6 +90,39 @@ export function useChildAgent(childId: string) {
     }
   }, [childId]);
 
+  const acceptMedia = useCallback(async () => {
+    if (!pendingMedia) throw new Error('Tidak ada permintaan media.');
+    if (pendingMedia.kind === 'camera') {
+      const facing = child?.cameraFacing || 'back';
+      const stream = await captureCamera(facing);
+      activeCameraStream.current = stream;
+      setMediaPreviewStream(stream);
+      cameraSession.current?.stop();
+      cameraSession.current = await GuardKidsRtcSession.startChild(childId, pendingMedia.sessionId, 'camera', stream, (state) => {
+        if (state === 'connected') setActiveMediaKind('camera');
+        if (state === 'failed' || state === 'disconnected' || state === 'closed') setActiveMediaKind(null);
+      });
+      await updateChildFromAgent(childId, { is_camera_active: true, camera_facing: facing, is_screen_mirroring_requested: false });
+      setPendingMedia(null); setActiveMediaKind('camera');
+      return;
+    }
+
+    const stream = await captureScreen();
+    setMediaPreviewStream(stream);
+    mirrorSession.current?.stop();
+    mirrorSession.current = await GuardKidsRtcSession.startChild(childId, pendingMedia.sessionId, 'screen', stream, (state) => {
+      if (state === 'connected') setActiveMediaKind('screen');
+      if (state === 'failed' || state === 'disconnected' || state === 'closed') setActiveMediaKind(null);
+    });
+    stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+      void updateChildFromAgent(childId, { is_screen_mirroring_active: false, is_screen_mirroring_requested: false });
+      mirrorSession.current?.stop(); mirrorSession.current = null; setActiveMediaKind(null); setMediaPreviewStream(null);
+    });
+    await updateChildFromAgent(childId, { is_screen_mirroring_active: true, is_screen_mirroring_requested: false });
+    setPendingMedia(null); setActiveMediaKind('screen');
+  }, [child, childId, pendingMedia]);
+
+
   const handleCommand = useCallback(async (command: any) => {
     const type = command.command as string;
     try {
@@ -465,38 +498,6 @@ export function useChildAgent(childId: string) {
     mirrorSession.current?.stop(); cameraSession.current?.stop();
     activeCameraStream.current?.getTracks().forEach((track) => track.stop());
   }, []);
-
-  const acceptMedia = useCallback(async () => {
-    if (!pendingMedia) throw new Error('Tidak ada permintaan media.');
-    if (pendingMedia.kind === 'camera') {
-      const facing = child?.cameraFacing || 'back';
-      const stream = await captureCamera(facing);
-      activeCameraStream.current = stream;
-      setMediaPreviewStream(stream);
-      cameraSession.current?.stop();
-      cameraSession.current = await GuardKidsRtcSession.startChild(childId, pendingMedia.sessionId, 'camera', stream, (state) => {
-        if (state === 'connected') setActiveMediaKind('camera');
-        if (state === 'failed' || state === 'disconnected' || state === 'closed') setActiveMediaKind(null);
-      });
-      await updateChildFromAgent(childId, { is_camera_active: true, camera_facing: facing, is_screen_mirroring_requested: false });
-      setPendingMedia(null); setActiveMediaKind('camera');
-      return;
-    }
-
-    const stream = await captureScreen();
-    setMediaPreviewStream(stream);
-    mirrorSession.current?.stop();
-    mirrorSession.current = await GuardKidsRtcSession.startChild(childId, pendingMedia.sessionId, 'screen', stream, (state) => {
-      if (state === 'connected') setActiveMediaKind('screen');
-      if (state === 'failed' || state === 'disconnected' || state === 'closed') setActiveMediaKind(null);
-    });
-    stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-      void updateChildFromAgent(childId, { is_screen_mirroring_active: false, is_screen_mirroring_requested: false });
-      mirrorSession.current?.stop(); mirrorSession.current = null; setActiveMediaKind(null); setMediaPreviewStream(null);
-    });
-    await updateChildFromAgent(childId, { is_screen_mirroring_active: true, is_screen_mirroring_requested: false });
-    setPendingMedia(null); setActiveMediaKind('screen');
-  }, [child, childId, pendingMedia]);
 
   const declineMedia = useCallback(async () => {
     if (!pendingMedia) return;
