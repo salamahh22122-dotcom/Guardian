@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { LockKeyhole, Shield, UserPlus, LogIn, Loader2, Mail, User } from 'lucide-react';
+import { LockKeyhole, Shield, UserPlus, LogIn, Loader2, Mail, User, Smartphone, Users } from 'lucide-react';
 import { isSupabaseConfigured, registerParent, loginParent } from '../lib/supabase';
 
 export const AuthScreen: React.FC = () => {
+  const [role, setRole] = useState<'parent' | 'child' | null>(null);
   const [isSignup, setIsSignup] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -47,6 +48,32 @@ export const AuthScreen: React.FC = () => {
     );
   }
 
+  if (!role) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-5">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl">
+        <button type="button" onClick={() => setRole(null)} className="text-xs text-slate-500 hover:text-emerald-400 mb-4">← Ganti jalur login</button>
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+              <Shield className="w-7 h-7 text-slate-950" />
+            </div>
+            <div><h1 className="font-extrabold text-xl">GuardKids</h1><p className="text-xs text-slate-400">Pilih jalur perangkat</p></div>
+          </div>
+          <h2 className="text-2xl font-bold text-white">Siapa yang menggunakan perangkat ini?</h2>
+          <p className="text-sm text-slate-400 mt-1 mb-6">Orang tua masuk ke portal. Perangkat anak dipasangkan langsung dari aplikasi Android.</p>
+          <div className="grid gap-3">
+            <button type="button" onClick={() => setRole('parent')} className="w-full p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-left border border-emerald-500/30">
+              <div className="flex items-center gap-3"><Users className="w-6 h-6 text-white" /><div><div className="font-bold text-white">Orang Tua</div><div className="text-xs text-emerald-100 mt-1">Login dengan email dan password</div></div></div>
+            </button>
+            <button type="button" onClick={() => { localStorage.setItem('guardkids_role', 'child'); const url = new URL(window.location.href); url.searchParams.set('mode','child'); window.location.assign(url.toString()); }} className="w-full p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-left border border-slate-700">
+              <div className="flex items-center gap-3"><Smartphone className="w-6 h-6 text-emerald-400" /><div><div className="font-bold text-white">Perangkat Anak</div><div className="text-xs text-slate-400 mt-1">Pasangkan dengan kode dari orang tua</div></div></div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-5">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-7 shadow-2xl">
@@ -54,7 +81,7 @@ export const AuthScreen: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
             <Shield className="w-7 h-7 text-slate-950" />
           </div>
-          <div><h1 className="font-extrabold text-xl">GuardKids</h1><p className="text-xs text-slate-400">Portal Orang Tua</p></div>
+          <div><h1 className="font-extrabold text-xl">GuardKids</h1><p className="text-xs text-slate-400">Login Orang Tua</p></div>
         </div>
         <h2 className="text-2xl font-bold text-white">{isSignup ? 'Buat akun orang tua' : 'Masuk ke portal'}</h2>
         <p className="text-sm text-slate-400 mt-1">Data keluarga tersimpan di backend Supabase.</p>
