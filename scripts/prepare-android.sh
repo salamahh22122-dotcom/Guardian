@@ -376,6 +376,49 @@ public class GuardianConnectionService extends Service {
 JAVA
 
 MAIN="$JAVA_DIR/MainActivity.java"
+if [ ! -f "$MAIN" ]; then
+cat > "$MAIN" <<'JAVA'
+package com.guardkids.app;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
+import android.webkit.WebView;
+
+import androidx.core.content.ContextCompat;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+  @Override
+  public void onStart() {
+    super.onStart();
+    WebView webView = getBridge().getWebView();
+    final WebChromeClient existing = webView.getWebChromeClient();
+    webView.setWebChromeClient(new WebChromeClient() {
+      @Override
+      public void onPermissionRequest(final PermissionRequest request) {
+        runOnUiThread(() -> {
+          String[] resources = request.getResources();
+          boolean camera = false;
+          boolean microphone = false;
+          for (String resource : resources) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) camera = true;
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) microphone = true;
+          }
+          boolean cameraGranted = !camera || ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+          boolean microphoneGranted = !microphone || ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+          if (cameraGranted && microphoneGranted) request.grant(resources);
+          else request.deny();
+        });
+      }
+    });
+  }
+}
+JAVA
+fi
+
 if [ -f "$MAIN" ] && ! grep -q "GuardianNativePlugin" "$MAIN"; then
   python3 - "$MAIN" <<'PY'
 from pathlib import Path
